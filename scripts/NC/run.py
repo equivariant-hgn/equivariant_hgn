@@ -2,11 +2,8 @@ import sys
 sys.path.append('../../')
 sys.path.append('../')
 
-import time
 import argparse
-import wandb
 from tqdm import tqdm
-import pdb
 from sklearn.metrics import f1_score
 import random
 import torch
@@ -14,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 #from utils import EarlyStopping
-from EquivHGNet import EquivHGNet
+from src.EquivHGNet import EquivHGNet
 from src.SparseMatrix import SparseMatrix
 
 from data_nc import load_data
@@ -32,7 +29,7 @@ def set_seed(seed):
 
 def select_features(data, schema, feats_type, target_ent):
     '''
-    TODO: IMPLEMENT THIS
+    Choose whether to ignore non-target node features
     '''
     # Select features for nodes
     in_dims = {}
@@ -50,24 +47,6 @@ def select_features(data, schema, feats_type, target_ent):
                 rel_id = num_relations + ent_i.id
                 data[rel_id] = SparseMatrix.from_other_sparse_matrix(data[rel_id], n_dim)
 
-    '''
-    elif feats_type == 2:
-        # Set all non-target node attributes to one-hot vector
-        for i in range(0, len(features_list)):
-            if i != target_ent:
-                dim = features_list[i].shape[0]
-                indices = torch.arange(n_instances).unsqueeze(0).repeat(2, 1)
-                values = torch.FloatTensor(np.ones(dim))
-                features_list[i] = torch.sparse.FloatTensor(indices, values, torch.Size([dim, dim])).to(device)
-    elif feats_type == 3:
-        in_dims = [features.shape[0] for features in features_list]
-        for i in range(len(features_list)):
-            dim = features_list[i].shape[0]
-            indices = np.vstack((np.arange(dim), np.arange(dim)))
-            indices = torch.LongTensor(indices)
-            values = np.ones(dim)
-            features_list[i] = torch.sparse.FloatTensor(indices, values, torch.Size([dim, dim])).to(device)
-    '''
     for rel in schema.relations:
         in_dims[rel.id] = data[rel.id].n_channels
     return data, in_dims
@@ -144,27 +123,19 @@ def run_model(args):
                                  weight_decay=args.weight_decay)
 
 
-    if args.wandb_log_run:
-        wandb.init(config=args,
-            settings=wandb.Settings(start_method='fork'),
-            project="XXX",
-            entity='XXX')
-        wandb.watch(net, log='all', log_freq=args.wandb_log_param_freq)
     print(args)
     run_name = args.dataset + '_' + str(args.run)
-    if args.wandb_log_run and wandb.run.name is not None:
-        run_name = run_name + '_' + str(wandb.run.name)
 
-    if args.checkpoint_path is not '':
+    if args.checkpoint_path != '':
         checkpoint_path = args.checkpoint_path
     else:
         checkpoint_path = f"checkpoint/checkpoint_{run_name}.pt"
-
     print("Checkpoint Path: " + checkpoint_path)
     progress = tqdm(range(args.epoch), desc="Epoch 0", position=0, leave=True)
     # training loop
     net.train()
     val_micro_best = 0
+    summary = dict()
     for epoch in progress:
         # training
         net.train()
@@ -184,9 +155,7 @@ def run_model(args):
         with torch.no_grad():
             progress.set_description(f"Epoch {epoch}")
             progress.set_postfix(loss=train_loss.item(), micr=train_micro)
-            wandb_log = {'Train Loss': train_loss.item(),
-                         'Train Micro': train_micro,
-                         'Train Macro': train_macro}
+
             if epoch % args.val_every == 0:
                 # validation
                 net.eval()
@@ -201,8 +170,6 @@ def run_model(args):
                                                          labels[val_idx])
                 print("\nVal Loss: {:.3f} Val Micro-F1: {:.3f} \
 Val Macro-F1: {:.3f}".format(val_loss, val_micro, val_macro))
-                wandb_log.update({'Val Loss': val_loss.item(),
-                                  'Val Micro-F1': val_micro, 'Val Macro-F1': val_macro})
                 if val_micro > val_micro_best:
 
                     val_micro_best = val_micro
@@ -218,24 +185,17 @@ Val Macro-F1: {:.3f}".format(val_loss, val_micro, val_macro))
                         'val_micro': val_micro,
                         'val_macro': val_macro
                         }, checkpoint_path)
-                    if args.wandb_log_run:
-                        wandb.summary["val_micro_best"] = val_micro
-                        wandb.summary["val_macro_best"] = val_macro
-                        wandb.summary["val_loss_best"] = val_loss.item()
-                        wandb.summary["epoch_best"] = epoch
-                        wandb.summary["train_loss_best"] = train_loss.item()
-                        wandb.summary['train_micro_best'] = train_micro,
-                        wandb.summary['train_macro_best'] = train_macro,
-                        wandb.save(checkpoint_path)
+                    summary["val_micro_best"] = val_micro
+                    summary["val_macro_best"] = val_macro
+                    summary["val_loss_best"] = val_loss.item()
+                    summary["epoch_best"] = epoch
+                    summary["train_loss_best"] = train_loss.item()
+                    summary['train_micro_best'] = train_micro,
+                    summary['train_macro_best'] = train_macro,
 
-            if epoch % args.wandb_log_loss_freq == 0:
-                if args.wandb_log_run:
-                    wandb.log(wandb_log, step=epoch)
-
-
+    print(summary) 
     # testing with evaluate_results_nc
     if args.evaluate:
-
         checkpoint = torch.load(checkpoint_path)
         net.load_state_dict(checkpoint['net_state_dict'])
         net.eval()
@@ -300,18 +260,11 @@ def get_hyperparams(argv):
     ap.add_argument('--no_save_embeddings', dest='save_embeddings',
                     action='store_false', default=True)
     ap.set_defaults(save_embeddings=True)
-    ap.add_argument('--wandb_log_param_freq', type=int, default=100)
-    ap.add_argument('--wandb_log_loss_freq', type=int, default=1)
-    ap.add_argument('--wandb_log_run', dest='wandb_log_run', action='store_true',
-                        help='Log this run in wandb')
-    ap.add_argument('--wandb_no_log_run', dest='wandb_log_run', action='store_false',
-                        help='Do not log this run in wandb')
     ap.add_argument('--output', type=str)
     ap.add_argument('--run', type=int, default=1)
     ap.add_argument('--multi_label', default=False, action='store_true',
                     help='multi-label classification. Only valid for IMDb dataset')
     ap.add_argument('--evaluate', type=int, default=1)
-    ap.set_defaults(wandb_log_run=False)
 
     args, argv = ap.parse_known_args(argv)
 

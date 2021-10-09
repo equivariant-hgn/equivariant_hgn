@@ -1,10 +1,9 @@
 import os
 import numpy as np
 import scipy.sparse as sp
-from collections import Counter, defaultdict, OrderedDict
-from sklearn.metrics import f1_score, auc, roc_auc_score, precision_recall_curve
+from collections import Counter, defaultdict
+from sklearn.metrics import roc_auc_score
 import random
-import copy
 
 
 class data_loader:

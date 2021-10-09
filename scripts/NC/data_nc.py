@@ -1,15 +1,11 @@
-import networkx as nx
 import numpy as np
-import scipy
-import pickle
-import scipy.sparse as sp
 import torch
 from src.SparseMatrix import SparseMatrix
 from src.DataSchema import DataSchema, Entity, Relation, SparseMatrixData
 from data_loader_nc import data_loader
 
 
-DATA_FILE_DIR = '../../data/hgb/NC/'
+DATA_FILE_DIR = '../../data/NC/'
 
 def load_data(prefix='DBLP', use_node_attrs=True, use_edge_data=True):
     dl = data_loader(DATA_FILE_DIR + prefix)

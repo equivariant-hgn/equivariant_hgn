@@ -1,9 +1,5 @@
-import networkx as nx
 import numpy as np
-import scipy
-import pickle
 import torch
-import scipy.sparse as sp
 import os
 from collections import defaultdict
 from data_loader_lp import data_loader
@@ -11,7 +7,7 @@ from src.DataSchema import DataSchema, Entity, Relation, SparseMatrixData
 from src.SparseMatrix import SparseMatrix
 
 
-DATA_FILE_DIR = '../../data/hgb/LP/'
+DATA_FILE_DIR = '../../data/LP/'
 
 def load_data(prefix='LastFM', use_node_attrs=True, use_edge_data=True):
     dl = data_loader(DATA_FILE_DIR+prefix)

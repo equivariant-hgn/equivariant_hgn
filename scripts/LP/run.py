@@ -1,24 +1,19 @@
 import sys
-sys.path.append('../../')
-import time
+#sys.path.append('../../')
 import argparse
 
-from collections import defaultdict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import random
-import wandb
 from tqdm import tqdm
-from sklearn.metrics import f1_score, auc, roc_auc_score, precision_recall_curve
 from data_lp import load_data, get_train_valid_pos, get_train_neg, \
     get_valid_neg, get_valid_neg_2hop, get_test_neigh_from_file, gen_file_for_evaluate
-from EquivHGAE import EquivHGAE, EquivLinkPredictor
+from src.EquivHGAE import EquivLinkPredictor
 from src.SparseMatrix import SparseMatrix
-from src.DataSchema import DataSchema, SparseMatrixData, Relation
+from src.DataSchema import DataSchema, SparseMatrixData
 import warnings
-import pdb
 warnings.filterwarnings("ignore", message="Setting attributes on ParameterDict is not supported.")
 
 #%%
@@ -28,66 +23,6 @@ def set_seed(seed):
     torch.manual_seed(random.randint(0, 2**32))
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-
-
-def select_features(data, schema, feats_type):
-    '''
-    TODO: IMPLEMENT THIS
-    '''
-    # Select features for nodes
-    in_dims = {}
-    num_relations = len(schema.relations) - len(schema.entities)
-
-    if feats_type == 0:
-        # Keep all node attributes
-        pass
-    '''
-    elif feats_type == 1:
-        # Set all non-target node attributes to zero
-        for ent_i in schema.entities:
-            if ent_i.id != target_ent:
-                # 10 dimensions for some reason
-                n_dim = 10
-                rel_id = num_relations + ent_i.id
-                data[rel_id] = SparseMatrix.from_other_sparse_matrix(data[rel_id], n_dim)
-
-    # Don't even worry bout it
-    features_list = [mat2tensor(features).to(device) for features in features_list]
-    if feats_type == 0:
-        in_dims = [features.shape[1] for features in features_list]
-    elif feats_type == 1 or feats_type == 5:
-        save = 0 if feats_type == 1 else 2
-        in_dims = []#[features_list[0].shape[1]] + [10] * (len(features_list) - 1)
-        for i in range(0, len(features_list)):
-            if i == save:
-                in_dims.append(features_list[i].shape[1])
-            else:
-                in_dims.append(10)
-                features_list[i] = torch.zeros((features_list[i].shape[0], 10)).to(device)
-    elif feats_type == 2 or feats_type == 4:
-        save = feats_type - 2[]
-        in_dims = [features.shape[0] for features in features_list]
-        for i in range(0, len(features_list)):
-            if i == save:
-                in_dims[i] = features_list[i].shape[1]
-                continue
-            dim = features_list[i].shape[0]
-            indices = np.vstack((np.arange(dim), np.arange(dim)))
-            indices = torch.LongTensor(indices)
-            values = torch.FloatTensor(np.ones(dim))
-            features_list[i] = torch.sparse.FloatTensor(indices, values, torch.Size([dim, dim])).to(device)
-    elif feats_type == 3:
-        in_dims = [features.shape[0] for features in features_list]
-        for i in range(len(features_list)):
-            dim = features_list[i].shape[0]
-            indices = np.vstack((np.arange(dim), np.arange(dim)))
-            indices = torch.LongTensor(indices)
-            values = torch.FloatTensor(np.ones(dim))
-            features_list[i] = torch.sparse.FloatTensor(indices, values, torch.Size([dim, dim])).to(device)
-    '''
-    for rel in schema.relations:
-        in_dims[rel.id] = data[rel.id].n_channels
-    return data, in_dims
 
 def loss_fcn(data_pred, data_true):
     return F.binary_cross_entropy(data_pred, data_true)
@@ -158,11 +93,10 @@ def make_target_matrix_test(relation, left, right, labels, device):
 #%%
 def run_model(args):
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    use_equiv = args.decoder == 'equiv'
 
     # Collect data and schema
-    schema, schema_out, data_original, dl = load_data(args.dataset, use_edge_data=args.use_edge_data)
-    data, in_dims = select_features(data_original, schema, args.feats_type)
+    schema, schema_out, data, dl = load_data(args.dataset, use_edge_data=args.use_edge_data)
+    in_dims = {rel.id: data[rel.id].n_channels for rel in schema.relations}
     data = data.to(device)
     
     # Precompute data indices
@@ -171,14 +105,9 @@ def run_model(args):
     target_rel_ids = dl.links_test['data'].keys()
     target_rels = [schema.relations[rel_id] for rel_id in target_rel_ids]
     target_ents = schema.entities
-    if use_equiv:
-        output_rel = None
-    else:
-        # Currently only equivariant decoder works for amazon dataset
-        if len(target_rels) > 1:
-            raise NotImplementedError()
-        else:
-            output_rel = target_rels[0]
+
+    output_rel = None
+
     data_embedding = SparseMatrixData.make_entity_embeddings(target_ents,
                                                              args.embedding_dim)
     data_embedding.to(device)
@@ -208,37 +137,22 @@ def run_model(args):
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # Set up logging and checkpointing
-    if args.wandb_log_run:
-        wandb.init(config=args,
-            settings=wandb.Settings(start_method='fork'),
-            project='XXX',
-            entity='XXX')
-        wandb.watch(net, log='all', log_freq=args.wandb_log_param_freq)
     print(args)
     run_name = args.dataset + '_' + str(args.run)
-    if args.wandb_log_run and wandb.run.name is not None:
-        run_name = run_name + '_' + str(wandb.run.name)
     if args.checkpoint_path != '':
         checkpoint_path = args.checkpoint_path
     else:
         checkpoint_path = f"checkpoint/checkpoint_{run_name}.pt"
     print("Checkpoint Path: " + checkpoint_path)
     val_metric_best = -1e10
-
+    summary = dict()
     # training
     loss_func = nn.BCELoss()
     progress = tqdm(range(args.epoch), desc="Epoch 0", position=0, leave=True)
     for epoch in progress:
         net.train()
         # Make target matrix and labels to train on
-        if use_equiv:
-            # Target is same as input
-            target_schema = schema
-            data_target = data.clone()
-        else:
-            # Target is just target relation
-            target_schema = DataSchema(schema.entities, target_rels)
-            data_target = SparseMatrixData(target_schema)
+        data_target = data.clone()
         labels_train = torch.Tensor([]).to(device)
         for target_rel in target_rels:
             train_neg_head, train_neg_tail = get_train_neg(dl, target_rel.id)
@@ -252,17 +166,14 @@ def run_model(args):
             labels_train = torch.cat([labels_train, labels_train_rel])
 
         # Make prediction
-        if use_equiv:
-            idx_id_tgt, idx_trans_tgt = data_target.calculate_indices()
-            output_data = net(data, indices_identity, indices_transpose,
-                       data_embedding, data_target, idx_id_tgt, idx_trans_tgt)
-            logits_combined = torch.Tensor([]).to(device)
-            for target_rel in target_rels:
-                logits_rel = output_data[target_rel.id].values.squeeze()
-                logits_combined = torch.cat([logits_combined, logits_rel])
-        else:
-            logits_combined = net(data, indices_identity, indices_transpose,
-                         data_embedding, data_target)
+        idx_id_tgt, idx_trans_tgt = data_target.calculate_indices()
+        output_data = net(data, indices_identity, indices_transpose,
+                   data_embedding, data_target, idx_id_tgt, idx_trans_tgt)
+        logits_combined = torch.Tensor([]).to(device)
+        for target_rel in target_rels:
+            logits_rel = output_data[target_rel.id].values.squeeze()
+            logits_combined = torch.cat([logits_combined, logits_rel])
+
         logp = torch.sigmoid(logits_combined)
         train_loss = loss_func(logp, labels_train)
 
@@ -274,7 +185,6 @@ def run_model(args):
         # Update logging
         progress.set_description(f"Epoch {epoch}")
         progress.set_postfix(loss=train_loss.item())
-        wandb_log = {'Train Loss': train_loss.item(), 'epoch':epoch}
 
         # Evaluate on validation set
         net.eval()
@@ -298,38 +208,30 @@ def run_model(args):
                     left = torch.cat([left, left_rel])
                     right = torch.cat([right, right_rel])
                     labels_val = torch.cat([labels_val, labels_val_rel])
-                    if use_equiv:
-                        # Add in training indices
-                        valid_combined_matrix, valid_mask = combine_matrices(valid_matrix, train_matrix)
-                        valid_masks[target_rel.id] = valid_mask
-                        data_target[target_rel.id] = valid_combined_matrix
+                    # Add in training indices
+                    valid_combined_matrix, valid_mask = combine_matrices(valid_matrix, train_matrix)
+                    valid_masks[target_rel.id] = valid_mask
+                    data_target[target_rel.id] = valid_combined_matrix
                 left = left.cpu().numpy()
                 right = right.cpu().numpy()
                 edge_list = np.concatenate([left.reshape((1,-1)), right.reshape((1,-1))], axis=0)
 
-                if use_equiv:
-                    data_target.zero_()
-                    idx_id_val, idx_trans_val = data_target.calculate_indices()
-                    output_data = net(data, indices_identity, indices_transpose,
-                               data_embedding, data_target, idx_id_val, idx_trans_val)
-                    logits_combined = torch.Tensor([]).to(device)
-                    for target_rel in target_rels:
-                        logits_rel_full = output_data[target_rel.id].values.squeeze()
-                        logits_rel = logits_rel_full[valid_masks[target_rel.id]]
-                        logits_combined = torch.cat([logits_combined, logits_rel])
-                else:
-                    # Mult-target not figured out for non-equivariant decoders yet
-                    raise NotImplementedError()
-                    logits_combined = net(data, indices_identity, indices_transpose,
-                                 data_embedding, data_target)
+                data_target.zero_()
+                idx_id_val, idx_trans_val = data_target.calculate_indices()
+                output_data = net(data, indices_identity, indices_transpose,
+                           data_embedding, data_target, idx_id_val, idx_trans_val)
+                logits_combined = torch.Tensor([]).to(device)
+                for target_rel in target_rels:
+                    logits_rel_full = output_data[target_rel.id].values.squeeze()
+                    logits_rel = logits_rel_full[valid_masks[target_rel.id]]
+                    logits_combined = torch.cat([logits_combined, logits_rel])
+
                 logp = torch.sigmoid(logits_combined)
                 val_loss = loss_func(logp, labels_val).item()
 
-                wandb_log.update({'val_loss': val_loss})
                 res = dl.evaluate(edge_list, logp.cpu().numpy(), labels_val.cpu().numpy())
                 val_roc_auc = res['roc_auc']
                 val_mrr = res['MRR']
-                wandb_log.update(res)
                 print("\nVal Loss: {:.3f} Val ROC AUC: {:.3f} Val MRR: {:.3f}".format(
                     val_loss, val_roc_auc, val_mrr))
                 if args.val_metric == 'loss':
@@ -351,16 +253,12 @@ def run_model(args):
                         'val_roc_auc': val_roc_auc,
                         'val_mrr': val_mrr
                         }, checkpoint_path)
-                    if args.wandb_log_run:
-                        wandb.summary["val_roc_auc_best"] = val_roc_auc
-                        wandb.summary["val_mrr_best"] = val_mrr
-                        wandb.summary["val_loss_best"] = val_loss
-                        wandb.summary["epoch_best"] = epoch
-                        wandb.summary["train_loss_best"] = train_loss.item()
-                        wandb.save(checkpoint_path)
-        if args.wandb_log_run:
-            wandb.log(wandb_log)
-
+                    summary["val_roc_auc_best"] = val_roc_auc
+                    summary["val_mrr_best"] = val_mrr
+                    summary["val_loss_best"] = val_loss
+                    summary["epoch_best"] = epoch
+                    summary["train_loss_best"] = train_loss.item()
+    print(summary) 
     # Evaluate on test set
     if args.evaluate:
         for target_rel in target_rels:
@@ -368,31 +266,22 @@ def run_model(args):
             checkpoint = torch.load(checkpoint_path)
             net.load_state_dict(checkpoint['net_state_dict'])
             net.eval()
-            if use_equiv:
-                # Target is same as input
-                data_target = data.clone()
-            else:
-                # Target is just target relation
-                data_target = SparseMatrixData(target_schema)
+            # Target is same as input
+            data_target = data.clone()
             with torch.no_grad():
                 left_full, right_full, test_labels_full = get_test_neigh_from_file(dl, args.dataset, target_rel.id)
                 test_matrix_full =  make_target_matrix_test(target_rel, left_full, right_full,
                                                       test_labels_full, device)
                 test_matrix, left, right, test_labels = coalesce_matrix(test_matrix_full)
 
-                if use_equiv:
-                    test_combined_matrix, test_mask = combine_matrices(test_matrix, train_matrix)
-                    data_target[target_rel.id] = test_combined_matrix
-                    data_target.zero_()
-                    idx_id_tst, idx_trans_tst = data_target.calculate_indices()
-                    data_out = net(data, indices_identity, indices_transpose,
-                               data_embedding, data_target, idx_id_tst, idx_trans_tst)
-                    logits_full = data_out[target_rel.id].values.squeeze()
-                    logits = logits_full[test_mask]
-                else:
-                    data_target[target_rel.id] = test_matrix
-                    logits = net(data, indices_identity, indices_transpose,
-                                 data_embedding, data_target)
+                test_combined_matrix, test_mask = combine_matrices(test_matrix, train_matrix)
+                data_target[target_rel.id] = test_combined_matrix
+                data_target.zero_()
+                idx_id_tst, idx_trans_tst = data_target.calculate_indices()
+                data_out = net(data, indices_identity, indices_transpose,
+                           data_embedding, data_target, idx_id_tst, idx_trans_tst)
+                logits_full = data_out[target_rel.id].values.squeeze()
+                logits = logits_full[test_mask]
                 pred = torch.sigmoid(logits).cpu().numpy()
                 left = left.cpu().numpy()
                 right = right.cpu().numpy()
@@ -405,14 +294,6 @@ def run_model(args):
 #%%
 def get_hyperparams(argv):
     ap = argparse.ArgumentParser(allow_abbrev=False, description='EquivHGN for Node Classification')
-    ap.add_argument('--feats_type', type=int, default=0,
-                    help='Type of the node features used. ' +
-                         '0 - loaded features; ' +
-                         '1 - only target node features (zero vec for others); ' +
-                         '2 - only target node features (id vec for others); ' +
-                         '3 - all id vec. Default is 2;' +
-                        '4 - only term features (id vec for others);' + 
-                        '5 - only term features (zero vec for others).')
     ap.add_argument('--epoch', type=int, default=300, help='Number of epochs.')
     ap.add_argument('--batch_size', type=int, default=100000)
     ap.add_argument('--patience', type=int, default=30, help='Patience.')
@@ -440,19 +321,12 @@ def get_hyperparams(argv):
     ap.add_argument('--save_embeddings', dest='save_embeddings', action='store_true', default=True)
     ap.add_argument('--no_save_embeddings', dest='save_embeddings', action='store_false', default=True)
     ap.set_defaults(save_embeddings=True)
-    ap.add_argument('--wandb_log_param_freq', type=int, default=100)
-    ap.add_argument('--wandb_log_loss_freq', type=int, default=1)
-    ap.add_argument('--wandb_log_run', dest='wandb_log_run', action='store_true',
-                        help='Log this run in wandb')
-    ap.add_argument('--wandb_no_log_run', dest='wandb_log_run', action='store_false',
-                        help='Do not log this run in wandb')
     ap.add_argument('--output', type=str)
     ap.add_argument('--run', type=int, default=1)
-    ap.add_argument('--evaluate', type=int, default=1)
+    ap.add_argument('--evaluate', type=int, default=1, help="If 1, output test set results")
     ap.add_argument('--decoder', type=str, default='equiv')
     ap.add_argument('--val_neg', type=str, default='random')
     ap.add_argument('--val_metric', type=str, default='roc_auc')
-    ap.set_defaults(wandb_log_run=False)
     args, argv = ap.parse_known_args(argv)
     if args.output == None:
         args.output = args.dataset + '_emb.dat'

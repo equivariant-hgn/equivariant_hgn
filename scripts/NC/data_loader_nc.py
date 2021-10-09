@@ -3,7 +3,7 @@ import numpy as np
 import scipy.sparse as sp
 from collections import Counter, defaultdict
 from sklearn.metrics import f1_score
-import time
+
 class data_loader:
     def __init__(self, path):
         self.path = path
