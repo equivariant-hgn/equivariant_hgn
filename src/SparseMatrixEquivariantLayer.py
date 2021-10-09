@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import numpy as np
 import math
 import torch
 import torch.nn as nn
 import itertools
 import logging
-from src.utils import get_all_ops, get_all_input_output_partitions, \
+from src.utils import get_all_input_output_partitions, \
                         get_ops_from_partitions, MATRIX_PREFIX_DIMS
-from src.DataSchema import SparseMatrixData, DataSchema, Data, Relation
+from src.DataSchema import SparseMatrixData, DataSchema, Relation
 from src.SparseMatrix import SparseMatrix
-import pdb
 
 LOG_LEVEL = logging.INFO
 

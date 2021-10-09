@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Feb  7 23:25:39 2021
 
-@author: Daniel
 """
 import torch
 import torch.nn as nn

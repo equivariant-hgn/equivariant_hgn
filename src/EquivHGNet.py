@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 import torch.nn as nn
 import torch.nn.functional as F
-from src.DataSchema import DataSchema
-from src.EquivariantLayer import EquivariantLayer
 from src.SparseMatrixEquivariantLayer import SparseMatrixEquivariantLayer, \
-                    SparseMatrixEntityPoolingLayer, SparseMatrixEntityBroadcastingLayer
-from src.SparseEquivariantLayer import SparseEquivariantLayer
+                    SparseMatrixEntityPoolingLayer
 from src.Modules import Activation,  Dropout,  SparseMatrixRelationLinear
 
 

@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sat Jan 30 22:31:50 2021
-
-@author: Daniel
 """
 
 import numpy as np
@@ -12,10 +9,6 @@ import torch
 
 
 # Non-relation dimensions (batch and channel)
-# TODO: This parameter controls whether to use the sparse or dense implementation
-# Dense: use PREFIX_DIMS = 2
-# Sparse: use PREFIX_DIMS = 0 because there are no batches and channels are handled separately
-# Matrix: use PREFIX_DIMS = 1 for initial channel dimension
 MATRIX_PREFIX_DIMS = 1
 SPARSE_PREFIX_DIMS = 0
 DENSE_PREFIX_DIMS = 2

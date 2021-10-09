@@ -6,7 +6,6 @@ import numpy as np
 import torch_sparse
 import torch_scatter
 from src.utils import get_masks_of_intersection, MATRIX_PREFIX_DIMS
-import pdb
 
 class SparseMatrix:
     def __init__(self, indices, values, shape, indices_diag=None, is_set=False):
@@ -248,7 +247,6 @@ class SparseMatrix:
     def broadcast_from_mask(self, data, mask, device=None):
         '''
         Broadcast data into self shape along indices from index_str
-        TODO: this is heavily tied to embed_diag
         '''
         idx_overlap = mask.nonzero().T
         n_channels= data.shape[-1]

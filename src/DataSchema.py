@@ -2,9 +2,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sat Dec  5 20:18:51 2020
 
-@author: Daniel
 """
 import torch
 import numpy as np
