@@ -6,7 +6,6 @@
 """
 import torch
 import numpy as np
-from src.SparseTensor import SparseTensor
 from src.SparseMatrix import SparseMatrix
 
 class DataSchema:
@@ -128,13 +127,6 @@ class Data:
                        for rel_id, data in self.rel_tensors.items()}
         return Data(self.schema, masked_data, batch_size=self.batch_size)
 
-    def to_sparse(self):
-        sparse = {}
-        for relation in self.schema.relations:
-            dense = self.rel_tensors[relation.id]
-            sparse[relation.id] = SparseTensor.from_dense_tensor(dense)
-        return  Data(self.schema, sparse, batch_size=self.batch_size)
-
     def to_sparse_matrix(self):
         sparse = {}
         for relation in self.schema.relations:
@@ -203,10 +195,6 @@ class Data:
         for rel_id, data in self.rel_tensors.items():
             cloned_data[rel_id] = data.clone()
         return Data(self.schema, cloned_data, self.batch_size)
-
-
-class SparseTensorData(Data):
-    pass
 
 class SparseMatrixData(Data):
 

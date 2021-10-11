@@ -10,7 +10,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-#from utils import EarlyStopping
 from src.EquivHGNet import EquivHGNet
 from src.SparseMatrix import SparseMatrix
 
@@ -225,15 +224,8 @@ def get_hyperparams(argv):
     ap.add_argument('--feats_type', type=int, default=0,
                     help='Type of the node features used. ' +
                          '0 - loaded features; ' +
-                         '1 - only target node features (zero vec for others); ' +
-                         '2 - only target node features (id vec for others); ' +
-                         '3 - all id vec. Default is 2;' +
-                        '4 - only term features (id vec for others);' + 
-                        '5 - only term features (zero vec for others).')
+                         '1 - only target node features (zero vec for others);')
     ap.add_argument('--epoch', type=int, default=300, help='Number of epochs.')
-    ap.add_argument('--patience', type=int, default=30, help='Patience.')
-    ap.add_argument('--repeat', type=int, default=1,
-                    help='Repeat the training and testing for N times. Default is 1.')
     ap.add_argument('--lr', type=float, default=1e-3)
     ap.add_argument('--dropout', type=float, default=0.5)
     ap.add_argument('--dataset', type=str, default='IMDB')
@@ -243,33 +235,26 @@ def get_hyperparams(argv):
     ap.add_argument('--layers', type=int, nargs='*', default=['64']*3,
                         help='Number of channels for equivariant layers')
     ap.add_argument('--fc_layer', type=int, default=64)
-    #ap.add_argument('--fc_layers', type=str, nargs='*', default=[64],
-    #                    help='Fully connected layers for target embeddings')
     ap.add_argument('--weight_decay', type=float, default=1e-4)
     ap.add_argument('--act_fn', type=str, default='LeakyReLU')
     ap.add_argument('--in_fc_layer', type=int, default=1)
     ap.add_argument('--optimizer', type=str, default='Adam')
     ap.add_argument('--val_every', type=int, default=5)
     ap.add_argument('--seed', type=int, default=1)
-    ap.add_argument('--norm',  type=int, default=1)
-    ap.add_argument('--norm_affine', type=int, default=1)
+    ap.add_argument('--norm',  type=int, default=1, 
+                    help='whether to apply batch normalization')
+    ap.add_argument('--norm_affine', type=int, default=1,
+                    help='if args.norm == True, whether to set normalization to be affine')
     ap.add_argument('--pool_op', type=str, default='mean')
     ap.add_argument('--use_edge_data',  type=int, default=1)
-    ap.add_argument('--save_embeddings', dest='save_embeddings',
-                    action='store_true', default=True)
-    ap.add_argument('--no_save_embeddings', dest='save_embeddings',
-                    action='store_false', default=True)
-    ap.set_defaults(save_embeddings=True)
-    ap.add_argument('--output', type=str)
     ap.add_argument('--run', type=int, default=1)
     ap.add_argument('--multi_label', default=False, action='store_true',
-                    help='multi-label classification. Only valid for IMDb dataset')
-    ap.add_argument('--evaluate', type=int, default=1)
+                    help='Multi-label classification. Only valid for IMDb dataset')
+    ap.add_argument('--evaluate', type=int, default=1,
+                    help='Set to 1 to produce test set predictions')
 
     args, argv = ap.parse_known_args(argv)
 
-    if args.output == None:
-        args.output = args.dataset + '_emb.dat'
     if args.dataset == 'IMDB':
         args.multi_label = True
     if args.in_fc_layer == 1:

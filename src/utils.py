@@ -82,49 +82,6 @@ def get_all_input_output_partitions(relation_in, relation_out, prefix_dims=1):
         output.append(mapping)
     return output
 
-
-def update_observed(observed_old, p_keep, min_observed):
-    '''
-    Updates observed entries
-    Source: https://github.com/drgrhm/exch_relational/blob/master/util.py#L186
-    Parameters:
-        observed_old: old binary array of observed entries
-        p_keep: proportion of observed entries to keep
-        min_observed: minimum number of entries per row and column
-    Returns:
-        observed_new: updated array of observed entries
-    '''
-
-    inds_sc = np.array(np.nonzero(observed_old)).T
-
-    n_keep = int(p_keep * inds_sc.shape[0])
-    n_drop = inds_sc.shape[0] - n_keep
-
-    inds_sc_keep = np.concatenate( (np.ones(n_keep), np.zeros(n_drop)) )
-    np.random.shuffle(inds_sc_keep)
-    inds_sc = inds_sc[inds_sc_keep == 1, :]
-
-    observed_new = np.zeros_like(observed_old)
-    observed_new[inds_sc[:,0], inds_sc[:,1]] = 1
-
-    shape = observed_new.shape
-    rows = np.sum(observed_new, axis=1)
-    for i in np.array(range(shape[0]))[rows < min_observed]:
-        diff = observed_old[i, :] - observed_new[i, :]
-        resample_inds = np.array(range(shape[1]))[diff == 1]
-        jj = np.random.choice(resample_inds, int(min_observed - rows[i]), replace=False)
-        observed_new[i, jj] = 1
-
-    cols = np.sum(observed_new, axis=0)
-    for j in np.array(range(shape[1]))[cols < min_observed]:
-        diff = observed_old[:, j] - observed_new[:, j]
-        resample_inds = np.array(range(shape[0]))[diff == 1]
-        ii = np.random.choice(resample_inds, int(min_observed - cols[j]), replace=False)
-        observed_new[ii, j] = 1
-
-    return observed_new
-
-
 def get_ops(partition):
     '''
     p: pool

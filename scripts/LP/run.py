@@ -293,12 +293,8 @@ def run_model(args):
 
 #%%
 def get_hyperparams(argv):
-    ap = argparse.ArgumentParser(allow_abbrev=False, description='EquivHGN for Node Classification')
+    ap = argparse.ArgumentParser(allow_abbrev=False, description='Equivariant HGN for Link Prediction')
     ap.add_argument('--epoch', type=int, default=300, help='Number of epochs.')
-    ap.add_argument('--batch_size', type=int, default=100000)
-    ap.add_argument('--patience', type=int, default=30, help='Patience.')
-    ap.add_argument('--repeat', type=int, default=1, help='Repeat the training \
-                    and testing for N times. Default is 1.')
     ap.add_argument('--lr', type=float, default=1e-3)
     ap.add_argument('--dropout', type=float, default=0.5)
     ap.add_argument('--dataset', type=str, default='PubMed')
@@ -307,8 +303,6 @@ def get_hyperparams(argv):
     ap.add_argument('--depth', type=int, default=3)
     ap.add_argument('--embedding_dim', type=int, default=64)
     ap.add_argument('--fc_layer', type=int, default=64)
-    #ap.add_argument('--fc_layers', type=str, nargs='*', default=[64],
-    #                    help='Fully connected layers for target embeddings')
     ap.add_argument('--weight_decay', type=float, default=1e-4)
     ap.add_argument('--act_fn', type=str, default='LeakyReLU')
     ap.add_argument('--in_fc_layer', type=int, default=1)
@@ -321,15 +315,12 @@ def get_hyperparams(argv):
     ap.add_argument('--save_embeddings', dest='save_embeddings', action='store_true', default=True)
     ap.add_argument('--no_save_embeddings', dest='save_embeddings', action='store_false', default=True)
     ap.set_defaults(save_embeddings=True)
-    ap.add_argument('--output', type=str)
     ap.add_argument('--run', type=int, default=1)
     ap.add_argument('--evaluate', type=int, default=1, help="If 1, output test set results")
     ap.add_argument('--decoder', type=str, default='equiv')
     ap.add_argument('--val_neg', type=str, default='random')
     ap.add_argument('--val_metric', type=str, default='roc_auc')
     args, argv = ap.parse_known_args(argv)
-    if args.output == None:
-        args.output = args.dataset + '_emb.dat'
     if args.in_fc_layer == 1:
         args.in_fc_layer = True
     else:
